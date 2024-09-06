@@ -10,9 +10,9 @@ import (
 func main() {
 	go manager.run()
 	http.HandleFunc("/", serveHome)
-	http.HandleFunc("/ws", handleWebSocket)
+	http.HandleFunc("/app/", handleWebSocket)
 
-	fmt.Println("Server is running on http://localhost:4400. WS Server is running on ws://localhost:4400/ws")
+	fmt.Println("Server is running on http://localhost:4400. WS Server is running on ws://localhost:4400/app")
 	log.Fatal(http.ListenAndServe(":4400", nil))
 }
 

@@ -54,7 +54,7 @@ type ParsedGiftedSubscriptionsData struct {
 	ChatroomID  *uint    `json:"chatroom_id"`
 	Username    *string  `json:"gifter_username"`
 	Gifts       []string `json:"gifted_usernames"`
-	GiftedTotal int      `json:"gifted_total"`
+	GifterTotal int      `json:"gifter_total"`
 }
 
 type ParsedRaidData struct {
@@ -146,9 +146,9 @@ func GenerateRandomSubscriptionEvent(channelID string) PusherMessage {
 func GenerateRandomGiftedSubscriptionsEvent(channelID string) PusherMessage {
 	chatroomID := uint(rand.Intn(10000))
 	gifterUsername := fmt.Sprintf("gifter%d", rand.Intn(1000))
-	giftedTotal := rand.Intn(10) + 1
-	gifts := make([]string, giftedTotal)
-	for i := 0; i < giftedTotal; i++ {
+	gifterTotal := rand.Intn(10) + 1
+	gifts := make([]string, gifterTotal)
+	for i := 0; i < gifterTotal; i++ {
 		gifts[i] = fmt.Sprintf("user%d", rand.Intn(1000))
 	}
 
@@ -156,7 +156,7 @@ func GenerateRandomGiftedSubscriptionsEvent(channelID string) PusherMessage {
 		ChatroomID:  &chatroomID,
 		Username:    &gifterUsername,
 		Gifts:       gifts,
-		GiftedTotal: giftedTotal,
+		GifterTotal: gifterTotal,
 	}
 
 	giftDataJSON, _ := json.Marshal(giftData)
