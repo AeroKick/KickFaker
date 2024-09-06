@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pusher-like WebSocket Dashboard</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f0f0f0;
+        }
+
+        #app {
+            max-width: 800px;
+            margin: 0 auto;
+            background-color: white;
+            padding: 20px;
+            border-radius: 5px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+
+        h1 {
+            text-align: center;
+            color: #333;
+        }
+
+        .controls {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        button {
+            padding: 10px 15px;
+            font-size: 16px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="app">
+        <h1>Pusher-like WebSocket Dashboard</h1>
+        <div class="controls">
+            <button onclick="triggerEvent('chat')">Chat Message</button>
+            <button onclick="triggerEvent('subscription')">Subscription</button>
+            <button onclick="triggerEvent('gifted_subscriptions')">Gifted Subscriptions</button>
+            <button onclick="triggerEvent('raid')">Raid</button>
+            <button onclick="triggerEvent('live')">Go Live</button>
+            <button onclick="triggerEvent('stop_broadcast')">Stop Broadcast</button>
+        </div>
+        <div class="controls">
+            <button id="chatToggle" onclick="toggleInterval('chat')">Start Chat Interval</button>
+            <button id="allEventsToggle" onclick="toggleInterval('all')">Start All Events Interval</button>
+        </div>
+        <div class="controls">
+            <input type="number" id="messageRateInput" placeholder="Messages per second" value="1" min="1" max="100">
+            <button onclick="setMessageRate()">Set Message Rate</button>
+        </div>
+    </div>
+
+    <script>
+        const socket = new WebSocket('ws://localhost:4400/ws');
+        let chatIntervalActive = false;
+        let allEventsIntervalActive = false;
+
+        socket.onopen = function (e) {
+            console.log('Connected to WebSocket');
+        };
+
+        function triggerEvent(eventType) {
+            const message = {
+                event: 'trigger_event',
+                data: { type: eventType }
+            };
+            socket.send(JSON.stringify(message));
+        }
+
+        function toggleInterval(type) {
+            const message = {
+                event: type === 'chat' ? 'toggle_chat_interval' : 'toggle_all_events_interval'
+            };
+            socket.send(JSON.stringify(message));
+
+            if (type === 'chat') {
+                chatIntervalActive = !chatIntervalActive;
+                document.getElementById('chatToggle').textContent = chatIntervalActive ? 'Stop Chat Interval' : 'Start Chat Interval';
+            } else {
+                allEventsIntervalActive = !allEventsIntervalActive;
+                document.getElementById('allEventsToggle').textContent = allEventsIntervalActive ? 'Stop All Events Interval' : 'Start All Events Interval';
+            }
+        }
+
+        function setMessageRate() {
+            const rate = parseInt(document.getElementById('messageRateInput').value);
+            if (rate && rate > 0 && rate <= 100) {
+                const message = {
+                    event: 'set_message_rate',
+                    data: { rate: rate }
+                };
+                socket.send(JSON.stringify(message));
+            } else {
+                alert('Please enter a valid message rate (1-100)');
+            }
+        }
+    </script>
+</body>
+
+</html>
