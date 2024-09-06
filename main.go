@@ -12,7 +12,7 @@ func main() {
 	http.HandleFunc("/", serveHome)
 	http.HandleFunc("/ws", handleWebSocket)
 
-	fmt.Println("Server is running on http://localhost:4400")
+	fmt.Println("Server is running on http://localhost:4400. WS Server is running on ws://localhost:4400/ws")
 	log.Fatal(http.ListenAndServe(":4400", nil))
 }
 
