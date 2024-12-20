@@ -33,8 +33,8 @@ func main() {
 	// Create a new mux for handling routes
 	mux := http.NewServeMux()
 
-	// Handle WebSocket connections
-	mux.HandleFunc("/ws", handleWebSocket)
+	// Handle WebSocket connections on any /app/ route
+	mux.HandleFunc("/app/", handleWebSocket)
 
 	// Serve static files from the embedded filesystem
 	fsys, err := fs.Sub(content, "web/dist")
@@ -47,8 +47,8 @@ func main() {
 
 	// Handle all other routes
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		// Serve index.html for all routes except /ws and static files
-		if strings.HasPrefix(r.URL.Path, "/ws") {
+		// If it's not a WebSocket request and starts with /app/, return 404
+		if !strings.Contains(r.Header.Get("Upgrade"), "websocket") && strings.HasPrefix(r.URL.Path, "/app/") {
 			http.NotFound(w, r)
 			return
 		}
@@ -66,6 +66,7 @@ func main() {
 	handler := corsMiddleware(mux)
 
 	log.Println("Server starting on :4400")
+	log.Println("WebSocket server available on ws://localhost:4400/app/*")
 	if err := http.ListenAndServe(":4400", handler); err != nil {
 		log.Fatal("ListenAndServe: ", err)
 	}

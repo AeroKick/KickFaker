@@ -60,7 +60,7 @@ function App() {
 
 	const getWebSocketUrl = () => {
 		const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-		return `${protocol}//${window.location.host}/ws${currentSessionId ? `?session=${currentSessionId}` : ""}`;
+		return `${protocol}//${window.location.host}/app/demo${currentSessionId ? `?session=${currentSessionId}` : ""}`;
 	};
 
 	return (

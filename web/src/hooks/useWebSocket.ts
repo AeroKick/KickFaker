@@ -16,8 +16,8 @@ export const useWebSocket = (sessionId: string | null) => {
 		const connectWebSocket = () => {
 			const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
 			const url = sessionId
-				? `${protocol}//${window.location.host}/ws?session=${sessionId}`
-				: `${protocol}//${window.location.host}/ws`;
+				? `${protocol}//${window.location.host}/app/demo?session=${sessionId}`
+				: `${protocol}//${window.location.host}/app/demo`;
 
 			const ws = new WebSocket(url);
 
