@@ -42,6 +42,14 @@ type parsedChatData struct {
 			} `json:"badges"`
 		} `json:"identity"`
 	} `json:"sender"`
+	MetaData struct {
+		Celebration struct {
+			ID          uint        `json:"id"`
+			Type        string      `json:"type"`
+			TotalMonths json.Number `json:"total_months"`
+			CreatedAt   string      `json:"created_at"`
+		}
+	}
 }
 
 type ParsedSubscriberData struct {
@@ -76,12 +84,13 @@ func init() {
 }
 
 func GenerateRandomChatMessage(channelID string) PusherMessage {
+	var user = GetRandomSlug()
 	chatData := parsedChatData{
 		AeroKickChannelId: uuid.New(),
 		ID:                uuid.New().String(),
 		ChatroomID:        json.Number(fmt.Sprintf("%d", rand.Intn(10000))),
-		Content:           fmt.Sprintf("Random message %d", rand.Intn(1000)),
-		Type:              "text",
+		Content:           fmt.Sprintf(GetRandomMessage()),
+		Type:              "message",
 		CreatedAt:         time.Now().Format(time.RFC3339),
 		Sender: struct {
 			ID       uint   `json:"id"`
@@ -96,8 +105,8 @@ func GenerateRandomChatMessage(channelID string) PusherMessage {
 			} `json:"identity"`
 		}{
 			ID:       uint(rand.Intn(10000)),
-			Username: fmt.Sprintf("user%d", rand.Intn(1000)),
-			Slug:     fmt.Sprintf("user%d", rand.Intn(1000)),
+			Username: fmt.Sprintf(user),
+			Slug:     fmt.Sprintf(user),
 			Identity: struct {
 				Color  string `json:"color"`
 				Badges []struct {
@@ -105,13 +114,73 @@ func GenerateRandomChatMessage(channelID string) PusherMessage {
 					Text string `json:"text"`
 				} `json:"badges"`
 			}{
-				Color: fmt.Sprintf("#%06x", rand.Intn(0xFFFFFF)),
-				Badges: []struct {
+				Color:  fmt.Sprintf("#%06x", rand.Intn(0xFFFFFF)),
+				Badges: GetRandomBadges(),
+			},
+		},
+	}
+
+	chatDataJSON, _ := json.Marshal(chatData)
+	return PusherMessage{
+		Event:   "App\\Events\\ChatMessageEvent",
+		Data:    string(chatDataJSON),
+		Channel: channelID,
+	}
+}
+
+func GenerateRandomCelebrationChatMessage(channelID string) PusherMessage {
+	var user = GetRandomSlug()
+	chatData := parsedChatData{
+		AeroKickChannelId: uuid.New(),
+		ID:                uuid.New().String(),
+		ChatroomID:        json.Number(fmt.Sprintf("%d", rand.Intn(10000))),
+		Content:           fmt.Sprintf(GetRandomMessage()),
+		Type:              "celebration",
+		CreatedAt:         time.Now().Format(time.RFC3339),
+		Sender: struct {
+			ID       uint   `json:"id"`
+			Username string `json:"username"`
+			Slug     string `json:"slug"`
+			Identity struct {
+				Color  string `json:"color"`
+				Badges []struct {
 					Type string `json:"type"`
 					Text string `json:"text"`
-				}{
-					{Type: "subscriber", Text: "1 Year"},
-				},
+				} `json:"badges"`
+			} `json:"identity"`
+		}{
+			ID:       uint(rand.Intn(10000)),
+			Username: fmt.Sprintf(user),
+			Slug:     fmt.Sprintf(user),
+			Identity: struct {
+				Color  string `json:"color"`
+				Badges []struct {
+					Type string `json:"type"`
+					Text string `json:"text"`
+				} `json:"badges"`
+			}{
+				Color:  fmt.Sprintf("#%06x", rand.Intn(0xFFFFFF)),
+				Badges: GetRandomBadges(),
+			},
+		},
+		MetaData: struct {
+			Celebration struct {
+				ID          uint        `json:"id"`
+				Type        string      `json:"type"`
+				TotalMonths json.Number `json:"total_months"`
+				CreatedAt   string      `json:"created_at"`
+			}
+		}{
+			Celebration: struct {
+				ID          uint        `json:"id"`
+				Type        string      `json:"type"`
+				TotalMonths json.Number `json:"total_months"`
+				CreatedAt   string      `json:"created_at"`
+			}{
+				ID:          uint(rand.Intn(10000)),
+				Type:        "subscription_renewed",
+				TotalMonths: json.Number(fmt.Sprintf("%d", rand.Intn(12))),
+				CreatedAt:   time.Now().Format(time.RFC3339),
 			},
 		},
 	}

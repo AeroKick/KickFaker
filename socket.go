@@ -223,6 +223,9 @@ func triggerEvent(eventType string) {
 	case "chat":
 		eventGenerator = GenerateRandomChatMessage
 		channelType = "chatroom"
+	case "chat_celebration":
+		eventGenerator = GenerateRandomCelebrationChatMessage
+		channelType = "chatroom"
 	case "subscription":
 		eventGenerator = GenerateRandomSubscriptionEvent
 		channelType = "chatroom"
@@ -293,7 +296,7 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request) {
 	// Send connection established message
 	establishedMessage := PusherMessage{
 		Event: "pusher:connection_established",
-		Data:  "{\"socket_id\":\"313759.198747\",\"activity_timeout\":120}",
+		Data:  "{\"socket_id\":\"400952.30449\",\"activity_timeout\":120}",
 	}
 	establishedMessageJSON, _ := json.Marshal(establishedMessage)
 	client.send <- establishedMessageJSON
