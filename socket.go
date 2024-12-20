@@ -2,12 +2,14 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 )
 
@@ -20,13 +22,15 @@ var upgrader = websocket.Upgrader{
 }
 
 type Client struct {
-	conn     *websocket.Conn
-	send     chan []byte
-	channels map[string]bool
+	conn      *websocket.Conn
+	send      chan []byte
+	channels  map[string]bool
+	sessionID string
 }
 
 type ClientManager struct {
 	clients    map[*Client]bool
+	sessions   map[string][]*Client
 	broadcast  chan []byte
 	register   chan *Client
 	unregister chan *Client
@@ -35,6 +39,7 @@ type ClientManager struct {
 
 var manager = ClientManager{
 	clients:    make(map[*Client]bool),
+	sessions:   make(map[string][]*Client),
 	broadcast:  make(chan []byte),
 	register:   make(chan *Client),
 	unregister: make(chan *Client),
@@ -46,32 +51,153 @@ func (manager *ClientManager) run() {
 		case client := <-manager.register:
 			manager.Lock()
 			manager.clients[client] = true
+			manager.sessions[client.sessionID] = append(manager.sessions[client.sessionID], client)
 			manager.Unlock()
 		case client := <-manager.unregister:
 			if _, ok := manager.clients[client]; ok {
 				close(client.send)
 				manager.Lock()
 				delete(manager.clients, client)
+				// Remove client from sessions
+				if clients, ok := manager.sessions[client.sessionID]; ok {
+					newClients := make([]*Client, 0)
+					for _, c := range clients {
+						if c != client {
+							newClients = append(newClients, c)
+						}
+					}
+					if len(newClients) == 0 {
+						delete(manager.sessions, client.sessionID)
+						// Clean up tickers for this session
+						if ticker, exists := chatIntervals[client.sessionID]; exists {
+							ticker.Stop()
+							delete(chatIntervals, client.sessionID)
+						}
+						if ticker, exists := allEventsIntervals[client.sessionID]; exists {
+							ticker.Stop()
+							delete(allEventsIntervals, client.sessionID)
+						}
+					} else {
+						manager.sessions[client.sessionID] = newClients
+					}
+				}
 				manager.Unlock()
 			}
 		case message := <-manager.broadcast:
+			// Broadcast to all clients regardless of session
+			manager.Lock()
 			for client := range manager.clients {
 				select {
 				case client.send <- message:
 				default:
 					close(client.send)
-					manager.Lock()
 					delete(manager.clients, client)
-					manager.Unlock()
+				}
+			}
+			manager.Unlock()
+		}
+	}
+}
+
+var messageRate = 1
+var chatIntervals = make(map[string]*time.Ticker)
+var allEventsIntervals = make(map[string]*time.Ticker)
+
+func updateIntervals() {
+	for sessionID, ticker := range chatIntervals {
+		if ticker != nil {
+			ticker.Stop()
+			chatIntervals[sessionID] = time.NewTicker(time.Second / time.Duration(messageRate))
+		}
+	}
+	for sessionID, ticker := range allEventsIntervals {
+		if ticker != nil {
+			ticker.Stop()
+			allEventsIntervals[sessionID] = time.NewTicker(time.Second / time.Duration(messageRate))
+		}
+	}
+}
+
+func sendEventToSubscribers(channelType string, eventGenerator func(string) PusherMessage, sessionID string) {
+	manager.Lock()
+	defer manager.Unlock()
+
+	if clients, ok := manager.sessions[sessionID]; ok {
+		for _, client := range clients {
+			for channel := range client.channels {
+				if strings.HasPrefix(channel, channelType) {
+					event := eventGenerator(channel)
+					eventJSON, _ := json.Marshal(event)
+					client.send <- eventJSON
 				}
 			}
 		}
 	}
 }
 
-var messageRate = 1
-var chatInterval *time.Ticker
-var allEventsInterval *time.Ticker
+func triggerEvent(eventType string, sessionID string) {
+	var eventGenerator func(string) PusherMessage
+	var channelType string
+
+	switch eventType {
+	case "chat":
+		eventGenerator = GenerateRandomChatMessage
+		channelType = "chatroom"
+	case "chat_celebration":
+		eventGenerator = GenerateRandomCelebrationChatMessage
+		channelType = "chatroom"
+	case "subscription":
+		eventGenerator = GenerateRandomSubscriptionEvent
+		channelType = "chatroom"
+	case "gifted_subscriptions":
+		eventGenerator = GenerateRandomGiftedSubscriptionsEvent
+		channelType = "chatroom"
+	case "raid":
+		eventGenerator = GenerateRandomRaidEvent
+		channelType = "chatroom"
+	case "live":
+		eventGenerator = func(channel string) PusherMessage {
+			return GenerateRandomLiveEvent(channel, true)
+		}
+		channelType = "channel"
+	case "stop_broadcast":
+		eventGenerator = func(channel string) PusherMessage {
+			return GenerateRandomLiveEvent(channel, false)
+		}
+		channelType = "channel"
+	default:
+		log.Printf("Unknown event type: %s", eventType)
+		return
+	}
+
+	sendEventToSubscribers(channelType, eventGenerator, sessionID)
+}
+
+func (c *Client) writePump() {
+	defer func() {
+		c.conn.Close()
+	}()
+
+	for {
+		select {
+		case message, ok := <-c.send:
+			if !ok {
+				c.conn.WriteMessage(websocket.CloseMessage, []byte{})
+				return
+			}
+
+			w, err := c.conn.NextWriter(websocket.TextMessage)
+			if err != nil {
+				return
+			}
+			w.Write(message)
+
+			if err := w.Close(); err != nil {
+				return
+			}
+		}
+	}
+}
 
 func (c *Client) readPump() {
 	defer func() {
@@ -152,134 +278,46 @@ func (c *Client) readPump() {
 				log.Printf("error: event type is not a string")
 				continue
 			}
-			triggerEvent(eventType)
+			triggerEvent(eventType, c.sessionID)
 
 		case "toggle_chat_interval":
-			toggleChatInterval()
+			if ticker, exists := chatIntervals[c.sessionID]; exists && ticker != nil {
+				ticker.Stop()
+				delete(chatIntervals, c.sessionID)
+			} else {
+				ticker := time.NewTicker(time.Second / time.Duration(messageRate))
+				chatIntervals[c.sessionID] = ticker
+				go func() {
+					for range ticker.C {
+						sendEventToSubscribers("chatroom", GenerateRandomChatMessage, c.sessionID)
+					}
+				}()
+			}
 
 		case "toggle_all_events_interval":
-			toggleAllEventsInterval()
-		}
-	}
-}
-
-func updateIntervals() {
-	if chatInterval != nil {
-		chatInterval.Stop()
-		chatInterval = time.NewTicker(time.Second / time.Duration(messageRate))
-	}
-	if allEventsInterval != nil {
-		allEventsInterval.Stop()
-		allEventsInterval = time.NewTicker(time.Second / time.Duration(messageRate))
-	}
-}
-
-func toggleChatInterval() {
-	if chatInterval == nil {
-		chatInterval = time.NewTicker(time.Second / time.Duration(messageRate))
-		go func() {
-			for range chatInterval.C {
-				sendEventToSubscribers("chatroom", GenerateRandomChatMessage)
-			}
-		}()
-	} else {
-		chatInterval.Stop()
-		chatInterval = nil
-	}
-}
-
-func toggleAllEventsInterval() {
-	if allEventsInterval == nil {
-		allEventsInterval = time.NewTicker(time.Second / time.Duration(messageRate))
-		go func() {
-			for range allEventsInterval.C {
-				sendEventToSubscribers("chatroom", GenerateRandomEvent)
-				sendEventToSubscribers("channel", GenerateRandomEvent)
-			}
-		}()
-	} else {
-		allEventsInterval.Stop()
-		allEventsInterval = nil
-	}
-}
-
-func sendEventToSubscribers(channelType string, eventGenerator func(string) PusherMessage) {
-	for client := range manager.clients {
-		for channel := range client.channels {
-			if strings.HasPrefix(channel, channelType) {
-				event := eventGenerator(channel)
-				eventJSON, _ := json.Marshal(event)
-				client.send <- eventJSON
-			}
-		}
-	}
-}
-
-func triggerEvent(eventType string) {
-	var eventGenerator func(string) PusherMessage
-	var channelType string
-
-	switch eventType {
-	case "chat":
-		eventGenerator = GenerateRandomChatMessage
-		channelType = "chatroom"
-	case "chat_celebration":
-		eventGenerator = GenerateRandomCelebrationChatMessage
-		channelType = "chatroom"
-	case "subscription":
-		eventGenerator = GenerateRandomSubscriptionEvent
-		channelType = "chatroom"
-	case "gifted_subscriptions":
-		eventGenerator = GenerateRandomGiftedSubscriptionsEvent
-		channelType = "chatroom"
-	case "raid":
-		eventGenerator = GenerateRandomRaidEvent
-		channelType = "chatroom"
-	case "live":
-		eventGenerator = func(channel string) PusherMessage {
-			return GenerateRandomLiveEvent(channel, true)
-		}
-		channelType = "channel"
-	case "stop_broadcast":
-		eventGenerator = func(channel string) PusherMessage {
-			return GenerateRandomLiveEvent(channel, false)
-		}
-		channelType = "channel"
-	default:
-		log.Printf("Unknown event type: %s", eventType)
-		return
-	}
-
-	sendEventToSubscribers(channelType, eventGenerator)
-}
-
-func (c *Client) writePump() {
-	defer func() {
-		c.conn.Close()
-	}()
-
-	for {
-		select {
-		case message, ok := <-c.send:
-			if !ok {
-				c.conn.WriteMessage(websocket.CloseMessage, []byte{})
-				return
-			}
-
-			w, err := c.conn.NextWriter(websocket.TextMessage)
-			if err != nil {
-				return
-			}
-			w.Write(message)
-
-			if err := w.Close(); err != nil {
-				return
+			if ticker, exists := allEventsIntervals[c.sessionID]; exists && ticker != nil {
+				ticker.Stop()
+				delete(allEventsIntervals, c.sessionID)
+			} else {
+				ticker := time.NewTicker(time.Second / time.Duration(messageRate))
+				allEventsIntervals[c.sessionID] = ticker
+				go func() {
+					for range ticker.C {
+						sendEventToSubscribers("chatroom", GenerateRandomEvent, c.sessionID)
+						sendEventToSubscribers("channel", GenerateRandomEvent, c.sessionID)
+					}
+				}()
 			}
 		}
 	}
 }
 
 func handleWebSocket(w http.ResponseWriter, r *http.Request) {
+	sessionID := r.URL.Query().Get("session")
+	if sessionID == "" {
+		sessionID = uuid.New().String()
+	}
+
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		log.Println(err)
@@ -287,16 +325,17 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request) {
 	}
 
 	client := &Client{
-		conn:     conn,
-		send:     make(chan []byte, 256),
-		channels: make(map[string]bool),
+		conn:      conn,
+		send:      make(chan []byte, 256),
+		channels:  make(map[string]bool),
+		sessionID: sessionID,
 	}
 	manager.register <- client
 
-	// Send connection established message
+	// Send connection established message with session ID
 	establishedMessage := PusherMessage{
 		Event: "pusher:connection_established",
-		Data:  "{\"socket_id\":\"400952.30449\",\"activity_timeout\":120}",
+		Data:  fmt.Sprintf("{\"socket_id\":\"400952.30449\",\"activity_timeout\":120,\"session_id\":\"%s\"}", sessionID),
 	}
 	establishedMessageJSON, _ := json.Marshal(establishedMessage)
 	client.send <- establishedMessageJSON
