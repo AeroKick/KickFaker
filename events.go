@@ -48,14 +48,14 @@ type parsedChatData struct {
 			Type        string      `json:"type"`
 			TotalMonths json.Number `json:"total_months"`
 			CreatedAt   string      `json:"created_at"`
-		}
-	}
+		} `json:"celebration"`
+	} `json:"metadata"`
 }
 
 type ParsedSubscriberData struct {
-	ChatroomID *uint   `json:"chatroom_id"`
+	ChatroomID int     `json:"chatroom_id"`
 	Username   *string `json:"username"`
-	Months     *uint   `json:"months"`
+	Months     int     `json:"months"`
 }
 
 type ParsedGiftedSubscriptionsData struct {
@@ -66,10 +66,14 @@ type ParsedGiftedSubscriptionsData struct {
 }
 
 type ParsedRaidData struct {
-	ChatroomID *uint   `json:"chatroom_id"`
-	Message    *string `json:"optional_message"`
-	Username   *string `json:"host_username"`
-	Viewers    uint    `json:"number_viewers"`
+	ChatroomID *uint `json:"chatroom_id"`
+	Message    struct {
+		NumberofViewers *uint `json:"numberOfViewers"`
+	} `json:"message"`
+	User struct {
+		ID       *uint   `json:"id"`
+		Username *string `json:"username"`
+	} `json:"user"`
 }
 
 type IsLiveData struct {
@@ -169,6 +173,13 @@ func GenerateRandomCelebrationChatMessage(channelID string) PusherMessage {
 				Type        string      `json:"type"`
 				TotalMonths json.Number `json:"total_months"`
 				CreatedAt   string      `json:"created_at"`
+			} `json:"celebration"`
+		}(struct {
+			Celebration struct {
+				ID          uint        `json:"id"`
+				Type        string      `json:"type"`
+				TotalMonths json.Number `json:"total_months"`
+				CreatedAt   string      `json:"created_at"`
 			}
 		}{
 			Celebration: struct {
@@ -182,7 +193,7 @@ func GenerateRandomCelebrationChatMessage(channelID string) PusherMessage {
 				TotalMonths: json.Number(fmt.Sprintf("%d", rand.Intn(12))),
 				CreatedAt:   time.Now().Format(time.RFC3339),
 			},
-		},
+		}),
 	}
 
 	chatDataJSON, _ := json.Marshal(chatData)
@@ -194,14 +205,13 @@ func GenerateRandomCelebrationChatMessage(channelID string) PusherMessage {
 }
 
 func GenerateRandomSubscriptionEvent(channelID string) PusherMessage {
-	chatroomID := uint(rand.Intn(10000))
+	//chatroomID := uint(rand.Intn(10000))
 	username := fmt.Sprintf("user%d", rand.Intn(1000))
-	months := uint(rand.Intn(12) + 1)
 
 	subData := ParsedSubscriberData{
-		ChatroomID: &chatroomID,
+		ChatroomID: 2271287,
 		Username:   &username,
-		Months:     &months,
+		Months:     1,
 	}
 
 	subDataJSON, _ := json.Marshal(subData)
@@ -239,19 +249,25 @@ func GenerateRandomGiftedSubscriptionsEvent(channelID string) PusherMessage {
 func GenerateRandomRaidEvent(channelID string) PusherMessage {
 	chatroomID := uint(rand.Intn(10000))
 	hostUsername := fmt.Sprintf("host%d", rand.Intn(1000))
-	message := fmt.Sprintf("Raiding with %d viewers!", rand.Intn(1000)+1)
 	viewers := uint(rand.Intn(1000) + 1)
+	userid := uint(rand.Intn(10000))
 
 	raidData := ParsedRaidData{
 		ChatroomID: &chatroomID,
-		Message:    &message,
-		Username:   &hostUsername,
-		Viewers:    viewers,
+		Message: struct {
+			NumberofViewers *uint `json:"numberOfViewers"`
+		}{
+			NumberofViewers: &viewers,
+		},
+		User: struct {
+			ID       *uint   `json:"id"`
+			Username *string `json:"username"`
+		}{ID: &userid, Username: &hostUsername},
 	}
 
 	raidDataJSON, _ := json.Marshal(raidData)
 	return PusherMessage{
-		Event:   "App\\Events\\StreamHostEvent",
+		Event:   "App\\Events\\StreamHostedEvent",
 		Data:    string(raidDataJSON),
 		Channel: channelID,
 	}

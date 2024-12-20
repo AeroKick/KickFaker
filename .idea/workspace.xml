@@ -4,15 +4,7 @@
     <option name="autoReloadType" value="ALL" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="465b6b59-d523-4a0d-86e6-d002928bf11d" name="Changes" comment="">
-      <change afterPath="$PROJECT_DIR$/fake-data.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/KickFaker.iml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/KickFaker.iml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/events.go" beforeDir="false" afterPath="$PROJECT_DIR$/events.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/main.go" beforeDir="false" afterPath="$PROJECT_DIR$/main.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/socket.go" beforeDir="false" afterPath="$PROJECT_DIR$/socket.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/web/index.html" beforeDir="false" afterPath="$PROJECT_DIR$/web/index.html" afterDir="false" />
-    </list>
+    <list default="true" id="465b6b59-d523-4a0d-86e6-d002928bf11d" name="Changes" comment="" />
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
